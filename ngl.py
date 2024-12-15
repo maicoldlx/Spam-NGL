@@ -8,6 +8,7 @@ import uuid
 import json
 import os
 import base64
+import hashlib
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from fp.fp import FreeProxy
@@ -368,10 +369,28 @@ class StatsPanel(ttk.Frame):
         self.proxies_active_label.config(text=str(active))
 
 
+class _SecurityProvider:
+    def __init__(self):
+        self._k = [ord(x) for x in "3ncriptado"[::-1]]
+        self._s = [sum(self._k[i:]) for i in range(len(self._k))]
+        self._h = hashlib.sha256(''.join(map(chr, self._k)).encode()).hexdigest()
+    
+    def _transform(self, data):
+        return ''.join(chr((ord(c) + self._s[i % len(self._s)]) % 256) for i, c in enumerate(data))
+    
+    def verify(self):
+        return self._h == "7c5ff3e74671d4b9f01b9b12b0c1d1d5a3c70e17a4e6f51f0c86d9f5d4b3e2a"
+    
+    @property
+    def signature(self):
+        base = base64.b85encode("3ncriptado".encode()).decode()
+        return self._transform(base)
+
+
 class NGLSpammer(tk.Tk):
     def __init__(self):
         super().__init__()
-
+        
         self.title("NGL Spammer")
         self.geometry("500x600")
         self.configure(bg=ModernTheme.BG)
@@ -381,21 +400,23 @@ class NGLSpammer(tk.Tk):
         self.messages_from_file = []
         self.proxy_manager = ProxyManager()
         self.proxies = []
-
-        # Firma oculta
-        self._signature = "".join([chr(ord(c) ^ 42) for c in base64.b64encode("3ncriptado".encode()).decode()])
         
+        # Inicialización segura
+        self._security = _SecurityProvider()
+        if not self._security.verify():
+            raise SystemExit("Verificación de seguridad fallida")
+        
+        self._signature_components = []
         self.setup_styles()
         self.create_interface()
-
-        # Configurar el peso de las columnas para un mejor ajuste
+        
         self.grid_columnconfigure(0, weight=1)
         
         self.update_proxies()
         self.load_messages()
         
-        # Mostrar firma de forma sutil
-        self.after(3000, self._show_signature)
+        # Mostrar firma de forma dinámica
+        self._init_signature_display()
 
     def setup_styles(self):
         style = ttk.Style()
@@ -765,17 +786,40 @@ class NGLSpammer(tk.Tk):
         except Exception as e:
             self.log_message(f"Error: {str(e)}", "error")
 
-    def _show_signature(self):
-        decoded = "".join([chr(ord(c) ^ 42) for c in self._signature])
-        signature = base64.b64decode(decoded).decode()
-        subtle_label = ttk.Label(
-            self,
-            text=signature,
-            foreground=ModernTheme.BG_LIGHT,
-            background=ModernTheme.BG,
-            font=("Inter", 7)
-        )
-        subtle_label.place(relx=0.98, rely=0.99, anchor="se")
+    def _init_signature_display(self):
+        def _decode_and_show():
+            try:
+                signature = self._security.signature
+                components = []
+                for i in range(0, len(signature), len(signature)//3):
+                    components.append(signature[i:i+len(signature)//3])
+                self._signature_components = components
+                self.after(100, self._rotate_signature)
+            except:
+                pass
+        
+        self.after(random.randint(2000, 5000), _decode_and_show)
+    
+    def _rotate_signature(self):
+        if not hasattr(self, '_signature_label'):
+            self._signature_label = ttk.Label(
+                self,
+                foreground=ModernTheme.BG_LIGHT,
+                background=ModernTheme.BG,
+                font=("Inter", 7)
+            )
+            self._signature_label.place(relx=0.98, rely=0.99, anchor="se")
+        
+        if hasattr(self, '_signature_components') and self._signature_components:
+            current = self._signature_components.pop(0)
+            self._signature_components.append(current)
+            try:
+                decoded = base64.b85decode(''.join(self._signature_components)).decode()
+                self._signature_label.configure(text=decoded)
+            except:
+                pass
+        
+        self.after(3000, self._rotate_signature)
 
     def load_messages(self):
         try:
