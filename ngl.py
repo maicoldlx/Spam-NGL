@@ -379,7 +379,7 @@ class _SecurityProvider:
         return ''.join(chr((ord(c) + self._s[i % len(self._s)]) % 256) for i, c in enumerate(data))
     
     def verify(self):
-        return self._h == "7c5ff3e74671d4b9f01b9b12b0c1d1d5a3c70e17a4e6f51f0c86d9f5d4b3e2a"
+        return self._h == "2d7e44c4a578c912f3d19e80a35935725f0fdf4c2d0f0a6c4c95c9a0b3f9e8d"
     
     @property
     def signature(self):
